@@ -93,8 +93,9 @@ server.tool(
     taskId: z.string().describe("主任務 ID"),
     subTaskId: z.string().optional().describe("子任務 ID (如果要更新子任務)"),
     status: z.enum(["todo", "in-progress", "completed", "failed"]).describe("新狀態"),
+    result: z.string().optional().describe("執行結果 (當狀態為 completed 時提供)"),
   },
-  async ({ taskId, subTaskId, status }) => {
+  async ({ taskId, subTaskId, status, result }) => {
     const task = await getTask(taskId);
     if (!task) return { isError: true, content: [{ type: "text", text: "找不到該任務" }] };
 
@@ -102,12 +103,25 @@ server.tool(
       const st = task.subTasks.find(s => s.id === subTaskId);
       if (!st) return { isError: true, content: [{ type: "text", text: "找不到該子任務" }] };
       st.status = status as TaskStatus;
+      if (status === "completed" && result) {
+        st.result = result;
+      }
     } else {
       task.status = status as TaskStatus;
     }
 
     await saveTask(task);
-    return { content: [{ type: "text", text: "狀態更新成功" }] };
+
+    // Calculate progress
+    const totalSubTasks = task.subTasks.length;
+    const completedSubTasks = task.subTasks.filter(st => st.status === "completed").length;
+    let progressMessage = "";
+    if (totalSubTasks > 0) {
+      const percentage = Math.round((completedSubTasks / totalSubTasks) * 100);
+      progressMessage = `。任務進度: ${percentage}% (${completedSubTasks}/${totalSubTasks})`;
+    }
+
+    return { content: [{ type: "text", text: `狀態更新成功${progressMessage}` }] };
   }
 );
 
