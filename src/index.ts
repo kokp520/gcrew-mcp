@@ -14,8 +14,8 @@ const server = new McpServer({
 server.tool(
   "create_main_task",
   {
-    goal: z.string().describe("任務的核心目標"),
-    description: z.string().describe("任務的詳細描述"),
+    goal: z.string().describe("The core goal of the task"),
+    description: z.string().describe("Detailed description of the task"),
   },
   async ({ goal, description }) => {
     const newTask: Task = {
@@ -29,7 +29,7 @@ server.tool(
     };
     await saveTask(newTask);
     return {
-      content: [{ type: "text", text: `主任務已建立，ID: ${newTask.id}` }],
+      content: [{ type: "text", text: `Main task created, ID: ${newTask.id}` }],
     };
   }
 );
@@ -38,17 +38,17 @@ server.tool(
 server.tool(
   "decompose_task",
   {
-    taskId: z.string().describe("主任務 ID"),
+    taskId: z.string().describe("Main task ID"),
     subTasks: z.array(z.object({
       title: z.string(),
       description: z.string(),
-      context: z.string().optional().describe("提供給子 agent 的上下文資訊"),
-      executionHint: z.string().optional().describe("建議的執行環境，例如 'new-workspace'"),
-    })).describe("子任務清單"),
+      context: z.string().optional().describe("Context information for the sub-agent"),
+      executionHint: z.string().optional().describe("Suggested execution environment, e.g., 'new-workspace'"),
+    })).describe("List of sub-tasks"),
   },
   async ({ taskId, subTasks }) => {
     const task = await getTask(taskId);
-    if (!task) return { isError: true, content: [{ type: "text", text: "找不到該任務" }] };
+    if (!task) return { isError: true, content: [{ type: "text", text: "Task not found" }] };
 
     const newSubTasks: SubTask[] = subTasks.map(st => ({
       id: Math.random().toString(36).substring(2, 11),
@@ -62,7 +62,7 @@ server.tool(
     task.subTasks.push(...newSubTasks);
     await saveTask(task);
     return {
-      content: [{ type: "text", text: `已為任務 ${taskId} 新增 ${newSubTasks.length} 個子任務` }],
+      content: [{ type: "text", text: `Added ${newSubTasks.length} sub-tasks to task ${taskId}` }],
     };
   }
 );
@@ -73,7 +73,7 @@ server.tool(
   {},
   async () => {
     const tasks = await readTasks();
-    if (tasks.length === 0) return { content: [{ type: "text", text: "目前沒有任何任務" }] };
+    if (tasks.length === 0) return { content: [{ type: "text", text: "No tasks currently exist" }] };
 
     const taskList = tasks.map(t => {
       const subtaskStatus = t.subTasks.map(st => `  - [${st.status === 'completed' ? 'x' : ' '}] ${st.title} (${st.id})`).join('\n');
@@ -88,24 +88,24 @@ server.tool(
 server.tool(
   "update_task_status",
   {
-    taskId: z.string().describe("主任務 ID"),
-    subTaskId: z.string().optional().describe("子任務 ID (如果要更新子任務)"),
-    status: z.enum(["todo", "in-progress", "completed", "failed"]).describe("新狀態"),
+    taskId: z.string().describe("Main task ID"),
+    subTaskId: z.string().optional().describe("Sub-task ID (if updating a sub-task)"),
+    status: z.enum(["todo", "in-progress", "completed", "failed"]).describe("New status"),
   },
   async ({ taskId, subTaskId, status }) => {
     const task = await getTask(taskId);
-    if (!task) return { isError: true, content: [{ type: "text", text: "找不到該任務" }] };
+    if (!task) return { isError: true, content: [{ type: "text", text: "Task not found" }] };
 
     if (subTaskId) {
       const st = task.subTasks.find(s => s.id === subTaskId);
-      if (!st) return { isError: true, content: [{ type: "text", text: "找不到該子任務" }] };
+      if (!st) return { isError: true, content: [{ type: "text", text: "Sub-task not found" }] };
       st.status = status as TaskStatus;
     } else {
       task.status = status as TaskStatus;
     }
 
     await saveTask(task);
-    return { content: [{ type: "text", text: "狀態更新成功" }] };
+    return { content: [{ type: "text", text: "Status updated successfully" }] };
   }
 );
 
@@ -123,7 +123,7 @@ server.tool(
         return {
           content: [{
             type: "text",
-            text: `下一個子任務:\nID: ${nextSubTask.id}\n主任務: ${task.goal} (${task.id})\n標題: ${nextSubTask.title}\n描述: ${nextSubTask.description}\n上下文: ${nextSubTask.context || "無"}`
+            text: `Next sub-task:\nID: ${nextSubTask.id}\nMain task: ${task.goal} (${task.id})\nTitle: ${nextSubTask.title}\nDescription: ${nextSubTask.description}\nContext: ${nextSubTask.context || "None"}`
           }]
         };
       }
@@ -132,13 +132,13 @@ server.tool(
         return {
           content: [{
             type: "text",
-            text: `目前沒有已分解的子任務，但主任務仍然是 todo 狀態:\nID: ${task.id}\n目標: ${task.goal}`
+            text: `No decomposed sub-tasks currently, but the main task is still in todo status:\nID: ${task.id}\nGoal: ${task.goal}`
           }]
         };
       }
     }
 
-    return { content: [{ type: "text", text: "目前沒有待辦任務" }] };
+    return { content: [{ type: "text", text: "No pending tasks currently" }] };
   }
 );
 
@@ -146,24 +146,24 @@ server.tool(
 server.tool(
   "get_launch_command",
   {
-    taskId: z.string().describe("任務 ID"),
-    subTaskId: z.string().optional().describe("子任務 ID"),
+    taskId: z.string().describe("Task ID"),
+    subTaskId: z.string().optional().describe("Sub-task ID"),
   },
   async ({ taskId, subTaskId }) => {
     const task = await getTask(taskId);
-    if (!task) return { isError: true, content: [{ type: "text", text: "找不到該任務" }] };
+    if (!task) return { isError: true, content: [{ type: "text", text: "Task not found" }] };
 
     let prompt = "";
     if (subTaskId) {
       const st = task.subTasks.find(s => s.id === subTaskId);
-      if (!st) return { isError: true, content: [{ type: "text", text: "找不到該子任務" }] };
+      if (!st) return { isError: true, content: [{ type: "text", text: "Sub-task not found" }] };
       
       let executionPrefix = "";
       if (st.executionHint) {
-        executionPrefix = `【執行環境建議：${st.executionHint}】\n`;
+        executionPrefix = `[Execution Environment Hint: ${st.executionHint}]\n`;
       }
 
-      prompt = `你現在是子 Agent，正在處理任務：\n主任務目標：${task.goal}\n子任務標題：${st.title}\n描述：${st.description}\n上下文：${st.context || "無"}\n\n請先分析現狀，然後開始執行。執行完畢後，請記得使用 gcrew-mcp 的 update_task_status 工具將子任務 ${subTaskId} 標記為 completed。`;
+      prompt = `You are a sub-agent handling a task:\nMain task goal: ${task.goal}\nSub-task title: ${st.title}\nDescription: ${st.description}\nContext: ${st.context || "None"}\n\nPlease analyze the current situation and execute. After completion, remember to use gcrew-mcp's update_task_status tool to mark sub-task ${subTaskId} as completed.`;
       
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
       const command = `gemini -i '${escapedPrompt}'`;
@@ -171,11 +171,11 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `${executionPrefix}啟動指令：\n${command}`
+          text: `${executionPrefix}Launch command:\n${command}`
         }]
       };
     } else {
-      prompt = `你現在是子 Agent，正在處理任務：\n目標：${task.goal}\n描述：${task.description}\n\n請先將此任務分解為具體的子任務（如果尚未分解），然後開始執行。`;
+      prompt = `You are a sub-agent handling a task:\nGoal: ${task.goal}\nDescription: ${task.description}\n\nPlease first decompose this task into specific sub-tasks (if not yet decomposed), and then execute.`;
       
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
       const command = `gemini -i '${escapedPrompt}'`;
