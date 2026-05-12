@@ -44,6 +44,7 @@ server.tool(
       description: z.string(),
       context: z.string().optional().describe("提供給子 agent 的上下文資訊"),
       executionHint: z.string().optional().describe("建議的執行環境，例如 'new-workspace'"),
+      dependsOn: z.array(z.string()).optional().describe("依賴的子任務 ID 清單"),
     })).describe("子任務清單"),
   },
   async ({ taskId, subTasks }) => {
@@ -57,6 +58,7 @@ server.tool(
       status: "todo",
       context: st.context,
       executionHint: st.executionHint,
+      dependsOn: st.dependsOn || [],
     }));
 
     task.subTasks.push(...newSubTasks);

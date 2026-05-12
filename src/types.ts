@@ -8,6 +8,8 @@ export interface SubTask {
   assignedAgent?: string;
   context?: string | undefined;
   executionHint?: string | undefined;
+  dependsOn: string[];
+  result?: string;
 }
 
 export interface Task {
