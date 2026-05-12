@@ -134,7 +134,20 @@ server.tool(
     for (const task of tasks) {
       if (task.status === 'completed' || task.status === 'failed') continue;
 
-      const nextSubTask = task.subTasks.find(st => st.status === 'todo');
+      const nextSubTask = task.subTasks.find(st => {
+        if (st.status !== 'todo') return false;
+        
+        // Check dependencies: all dependencies must be completed
+        if (st.dependsOn && st.dependsOn.length > 0) {
+          return st.dependsOn.every(depId => {
+            const depTask = task.subTasks.find(s => s.id === depId);
+            return depTask && depTask.status === 'completed';
+          });
+        }
+        
+        return true;
+      });
+
       if (nextSubTask) {
         return {
           content: [{
@@ -144,7 +157,7 @@ server.tool(
         };
       }
 
-      if (task.status === 'todo') {
+      if (task.status === 'todo' && task.subTasks.length === 0) {
         return {
           content: [{
             type: "text",
