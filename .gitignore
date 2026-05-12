@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# IDEs and Tools
+.vscode/
+.idea/
+.gemini/
+.tasks.json
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Temporary files
+temp/
+tmp/
+*.tmp
