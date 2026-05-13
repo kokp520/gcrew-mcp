@@ -44,6 +44,7 @@ server.tool(
       description: z.string(),
       context: z.string().optional().describe("Context information for the sub-agent"),
       executionHint: z.string().optional().describe("Suggested execution environment, e.g., 'new-workspace'"),
+      dependsOn: z.array(z.string()).optional().describe("List of dependent sub-task IDs"),
     })).describe("List of sub-tasks"),
   },
   async ({ taskId, subTasks }) => {
@@ -57,6 +58,7 @@ server.tool(
       status: "todo",
       context: st.context,
       executionHint: st.executionHint,
+      dependsOn: st.dependsOn || [],
     }));
 
     task.subTasks.push(...newSubTasks);
@@ -91,8 +93,9 @@ server.tool(
     taskId: z.string().describe("Main task ID"),
     subTaskId: z.string().optional().describe("Sub-task ID (if updating a sub-task)"),
     status: z.enum(["todo", "in-progress", "completed", "failed"]).describe("New status"),
+    result: z.string().optional().describe("Execution result (provided when status is completed)"),
   },
-  async ({ taskId, subTaskId, status }) => {
+  async ({ taskId, subTaskId, status, result }) => {
     const task = await getTask(taskId);
     if (!task) return { isError: true, content: [{ type: "text", text: "Task not found" }] };
 
@@ -100,12 +103,25 @@ server.tool(
       const st = task.subTasks.find(s => s.id === subTaskId);
       if (!st) return { isError: true, content: [{ type: "text", text: "Sub-task not found" }] };
       st.status = status as TaskStatus;
+      if (status === "completed" && result) {
+        st.result = result;
+      }
     } else {
       task.status = status as TaskStatus;
     }
 
     await saveTask(task);
-    return { content: [{ type: "text", text: "Status updated successfully" }] };
+
+    // Calculate progress
+    const totalSubTasks = task.subTasks.length;
+    const completedSubTasks = task.subTasks.filter(st => st.status === "completed").length;
+    let progressMessage = "";
+    if (totalSubTasks > 0) {
+      const percentage = Math.round((completedSubTasks / totalSubTasks) * 100);
+      progressMessage = `. Task progress: ${percentage}% (${completedSubTasks}/${totalSubTasks})`;
+    }
+
+    return { content: [{ type: "text", text: `Status updated successfully${progressMessage}` }] };
   }
 );
 
@@ -118,7 +134,20 @@ server.tool(
     for (const task of tasks) {
       if (task.status === 'completed' || task.status === 'failed') continue;
 
-      const nextSubTask = task.subTasks.find(st => st.status === 'todo');
+      const nextSubTask = task.subTasks.find(st => {
+        if (st.status !== 'todo') return false;
+        
+        // Check dependencies: all dependencies must be completed
+        if (st.dependsOn && st.dependsOn.length > 0) {
+          return st.dependsOn.every(depId => {
+            const depTask = task.subTasks.find(s => s.id === depId);
+            return depTask && depTask.status === 'completed';
+          });
+        }
+        
+        return true;
+      });
+
       if (nextSubTask) {
         return {
           content: [{
@@ -128,7 +157,7 @@ server.tool(
         };
       }
 
-      if (task.status === 'todo') {
+      if (task.status === 'todo' && task.subTasks.length === 0) {
         return {
           content: [{
             type: "text",
@@ -154,6 +183,7 @@ server.tool(
     if (!task) return { isError: true, content: [{ type: "text", text: "Task not found" }] };
 
     let prompt = "";
+
     if (subTaskId) {
       const st = task.subTasks.find(s => s.id === subTaskId);
       if (!st) return { isError: true, content: [{ type: "text", text: "Sub-task not found" }] };
@@ -163,7 +193,21 @@ server.tool(
         executionPrefix = `[Execution Environment Hint: ${st.executionHint}]\n`;
       }
 
-      prompt = `You are a sub-agent handling a task:\nMain task goal: ${task.goal}\nSub-task title: ${st.title}\nDescription: ${st.description}\nContext: ${st.context || "None"}\n\nPlease analyze the current situation and execute. After completion, remember to use gcrew-mcp's update_task_status tool to mark sub-task ${subTaskId} as completed.`;
+      // Collect dependency results
+      let dependencyResults = "";
+      if (st.dependsOn && st.dependsOn.length > 0) {
+        const results = st.dependsOn
+          .map(depId => task.subTasks.find(s => s.id === depId))
+          .filter(dep => dep && dep.status === 'completed' && dep.result)
+          .map(dep => `### Prerequisite task result: ${dep!.title} (${dep!.id})\n${dep!.result}`)
+          .join('\n\n');
+        
+        if (results) {
+          dependencyResults = `\n\n## Dependent Task Results\n${results}`;
+        }
+      }
+
+      prompt = `You are a sub-agent handling a task:\nMain task goal: ${task.goal}\nSub-task title: ${st.title}\nDescription: ${st.description}\nContext: ${st.context || "None"}${dependencyResults}\n\nPlease analyze the current situation and execute. After completion, remember to use gcrew-mcp's update_task_status tool to mark sub-task ${subTaskId} as completed.`;
       
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
       const command = `gemini -i '${escapedPrompt}'`;
