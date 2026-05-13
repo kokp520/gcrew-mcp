@@ -42,6 +42,7 @@ server.tool(
     subTasks: z.array(z.object({
       title: z.string(),
       description: z.string(),
+      model: z.string().optional().describe("Model to use for this sub-task, e.g., 'gemini-1.5-flash'"),
       context: z.string().optional().describe("Context information for the sub-agent"),
       executionHint: z.string().optional().describe("Suggested execution environment, e.g., 'new-workspace'"),
       dependsOn: z.array(z.string()).optional().describe("List of dependent sub-task IDs"),
@@ -51,15 +52,33 @@ server.tool(
     const task = await getTask(taskId);
     if (!task) return { isError: true, content: [{ type: "text", text: "Task not found" }] };
 
-    const newSubTasks: SubTask[] = subTasks.map(st => ({
-      id: Math.random().toString(36).substring(2, 11),
-      title: st.title,
-      description: st.description,
-      status: "todo",
-      context: st.context,
-      executionHint: st.executionHint,
-      dependsOn: st.dependsOn || [],
-    }));
+    const complexKeywords = ["refactor", "architect", "debug", "design", "implement", "重構", "設計", "除錯", "實作"];
+
+    const newSubTasks: SubTask[] = subTasks.map(st => {
+      let selectedModel = st.model;
+      
+      // Auto-assign model if not provided
+      if (!selectedModel) {
+        const fullContent = (st.title + st.description + (st.context || "")).toLowerCase();
+        const isComplex = complexKeywords.some(kw => fullContent.includes(kw));
+        const isShort = fullContent.length < 200;
+
+        if (isShort && !isComplex) {
+          selectedModel = "gemini-1.5-flash";
+        }
+      }
+
+      return {
+        id: Math.random().toString(36).substring(2, 11),
+        title: st.title,
+        description: st.description,
+        status: "todo",
+        model: selectedModel,
+        context: st.context,
+        executionHint: st.executionHint,
+        dependsOn: st.dependsOn || [],
+      };
+    });
 
     task.subTasks.push(...newSubTasks);
     await saveTask(task);
@@ -78,7 +97,10 @@ server.tool(
     if (tasks.length === 0) return { content: [{ type: "text", text: "No tasks currently exist" }] };
 
     const taskList = tasks.map(t => {
-      const subtaskStatus = t.subTasks.map(st => `  - [${st.status === 'completed' ? 'x' : ' '}] ${st.title} (${st.id})`).join('\n');
+      const subtaskStatus = t.subTasks.map(st => {
+        const modelInfo = st.model ? ` [${st.model}]` : "";
+        return `  - [${st.status === 'completed' ? 'x' : ' '}] ${st.title} (${st.id})${modelInfo}`;
+      }).join('\n');
       return `[${t.status}] ${t.goal} (${t.id})\n${subtaskStatus}`;
     }).join('\n\n');
 
@@ -128,10 +150,14 @@ server.tool(
 // Tool: Get the next task to perform
 server.tool(
   "get_next_task",
-  {},
-  async () => {
+  {
+    taskId: z.string().optional().describe("Optional: Focus on a specific task ID"),
+  },
+  async ({ taskId }) => {
     const tasks = await readTasks();
-    for (const task of tasks) {
+    const filteredTasks = taskId ? tasks.filter(t => t.id === taskId) : tasks;
+
+    for (const task of filteredTasks) {
       if (task.status === 'completed' || task.status === 'failed') continue;
 
       const nextSubTask = task.subTasks.find(st => {
@@ -152,7 +178,7 @@ server.tool(
         return {
           content: [{
             type: "text",
-            text: `Next sub-task:\nID: ${nextSubTask.id}\nMain task: ${task.goal} (${task.id})\nTitle: ${nextSubTask.title}\nDescription: ${nextSubTask.description}\nContext: ${nextSubTask.context || "None"}`
+            text: `Next sub-task:\nID: ${nextSubTask.id}\nMain task: ${task.goal} (${task.id})\nTitle: ${nextSubTask.title}\nDescription: ${nextSubTask.description}\nModel: ${nextSubTask.model || "Default"}\nContext: ${nextSubTask.context || "None"}`
           }]
         };
       }
@@ -210,7 +236,8 @@ server.tool(
       prompt = `You are a sub-agent handling a task:\nMain task goal: ${task.goal}\nSub-task title: ${st.title}\nDescription: ${st.description}\nContext: ${st.context || "None"}${dependencyResults}\n\nPlease analyze the current situation and execute. After completion, remember to use gcrew-mcp's update_task_status tool to mark sub-task ${subTaskId} as completed.`;
       
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      const command = `gemini -i '${escapedPrompt}'`;
+      const modelFlag = st.model ? `-m ${st.model} ` : "";
+      const command = `gemini ${modelFlag}-i '${escapedPrompt}'`;
 
       return {
         content: [{
