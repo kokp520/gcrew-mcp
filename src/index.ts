@@ -177,20 +177,17 @@ server.tool(
   {
     taskId: z.string().describe("任務 ID"),
     subTaskId: z.string().optional().describe("子任務 ID"),
-    useCmux: z.boolean().optional().default(false).describe("是否使用 cmux 包裝指令"),
   },
-  async ({ taskId, subTaskId, useCmux }) => {
+  async ({ taskId, subTaskId }) => {
     const task = await getTask(taskId);
     if (!task) return { isError: true, content: [{ type: "text", text: "找不到該任務" }] };
 
     let prompt = "";
-    let title = "";
 
     if (subTaskId) {
       const st = task.subTasks.find(s => s.id === subTaskId);
       if (!st) return { isError: true, content: [{ type: "text", text: "找不到該子任務" }] };
       
-      title = `Task: ${st.title}`;
       let executionPrefix = "";
       if (st.executionHint) {
         executionPrefix = `【執行環境建議：${st.executionHint}】\n`;
@@ -213,11 +210,7 @@ server.tool(
       prompt = `你現在是子 Agent，正在處理任務：\n主任務目標：${task.goal}\n子任務標題：${st.title}\n描述：${st.description}\n上下文：${st.context || "無"}${dependencyResults}\n\n請先分析現狀，然後開始執行。執行完畢後，請記得使用 gcrew-mcp 的 update_task_status 工具將子任務 ${subTaskId} 標記為 completed。`;
       
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      let command = `gemini -i '${escapedPrompt}'`;
-
-      if (useCmux) {
-        command = `cmux new-workspace --title "${title.replace(/"/g, '\\"')}" --command "${command.replace(/"/g, '\\"')}"`;
-      }
+      const command = `gemini -i '${escapedPrompt}'`;
 
       return {
         content: [{
@@ -226,15 +219,10 @@ server.tool(
         }]
       };
     } else {
-      title = `Task Decomposition: ${task.id}`;
       prompt = `你現在是子 Agent，正在處理任務：\n目標：${task.goal}\n描述：${task.description}\n\n請先將此任務分解為具體的子任務（如果尚未分解），然後開始執行。`;
       
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      let command = `gemini -i '${escapedPrompt}'`;
-
-      if (useCmux) {
-        command = `cmux new-workspace --title "${title.replace(/"/g, '\\"')}" --command "${command.replace(/"/g, '\\"')}"`;
-      }
+      const command = `gemini -i '${escapedPrompt}'`;
 
       return {
         content: [{

@@ -1,8 +1,8 @@
-# 設計文件：gcrew-mcp 任務增強功能 (相依性、數據管線、cmux 整合)
+# 設計文件：gcrew-mcp 任務增強功能 (相依性、數據管線)
 
 - **日期**：2026-05-12
 - **狀態**：設計中
-- **目標**：提升任務編排的自動化程度，支援複雜任務流與環境整合。
+- **目標**：提升任務編排的自動化程度，支援複雜任務流與數據流轉。
 
 ## 1. 核心變更
 
@@ -42,14 +42,6 @@ export interface SubTask {
     - 取得這些前置任務的 `result` 內容。
     - 將結果格式化為 Markdown 並併入啟動指令的 `context` 中。
 
-### 2.3 cmux 深度整合
-
-- **自動化 Workspace**：`get_launch_command` 新增 `useCmux` 參數（boolean）。
-    - 若為 `true`，指令將封裝為 `cmux new-workspace` 格式。
-- **視覺化進度條**：
-    - 在 `update_task_status` 成功更新後，計算主任務的完成進度百分比。
-    - 調用 `mcp_cmux-mcp_set_progress` 工具，將進度顯示在 cmux 側邊欄。
-
 ## 3. 工具介面變更 (MCP Tools)
 
 ### 3.1 `decompose_task`
@@ -59,7 +51,7 @@ export interface SubTask {
 - 新增 `result: z.string().optional()`。
 
 ### 3.3 `get_launch_command`
-- 新增 `useCmux: z.boolean().optional().default(false)`。
+- 移除原本設計中的 `useCmux` 參數。
 
 ## 4. 驗證計劃
 
@@ -68,4 +60,4 @@ export interface SubTask {
     - 建立任務 A 與任務 B (B depends on A)。
     - 完成 A 並提供結果。
     - 獲取 B 的指令，確認 A 的結果出現在內容中。
-    - 確認指令是否正確包裝 cmux 語法。
+
