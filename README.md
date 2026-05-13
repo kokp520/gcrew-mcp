@@ -34,13 +34,34 @@ The `get_next_task` tool now supports an optional `taskId` parameter. This allow
 
 ## Installation & Execution
 
+### Run via npx (Recommended)
+You can run the server directly without installation using `npx`:
+```bash
+npx gcrew-mcp
+```
+
+### Usage with Gemini CLI
+To integrate `gcrew-mcp` into your Gemini CLI workflow, add it to your configuration (typically in `~/.gemini/config.json` or your local `.gemini/config.json`):
+
+```json
+{
+  "mcp_servers": {
+    "gcrew": {
+      "command": "npx",
+      "args": ["-y", "gcrew-mcp"]
+    }
+  }
+}
+```
+
 ### Development Mode
 ```bash
 npm install
-npm run dev
+npm run build
+npm start
 ```
 
-### Build
+### Build from source
 ```bash
 npm run build
 ```
