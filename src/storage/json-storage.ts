@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import type { Task } from './types.js';
+import type { Task } from '../types/index.js';
 
 const STORAGE_FILE = path.join(process.cwd(), '.tasks.json');
 
