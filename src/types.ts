@@ -5,7 +5,8 @@ export interface SubTask {
   title: string;
   description: string;
   status: TaskStatus;
-  assignedAgent?: string;
+  assignedAgent?: string | undefined;
+  model?: string | undefined;
   context?: string | undefined;
   executionHint?: string | undefined;
   dependsOn: string[];
